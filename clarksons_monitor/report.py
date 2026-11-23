@@ -1,5 +1,6 @@
 from docx import Document
 from docx.shared import Inches, Pt
+from docx.oxml.ns import qn
 
 
 def report(path, result):
@@ -7,6 +8,10 @@ def report(path, result):
     sec=d.sections[0]
     sec.top_margin=sec.bottom_margin=Inches(.7)
     style=d.styles['Normal']; style.font.name='Calibri'; style.font.size=Pt(10)
+    for element in d.element.iter(qn('w:pBdr')):
+        element.getparent().remove(element)
+    for sty in d.styles:
+        for element in list(sty.element.iter(qn('w:pBdr'))): element.getparent().remove(element)
     d.add_heading('Clarksons results monitor',0)
     d.add_paragraph(result['started']+' | Human review required')
     d.add_heading('Run outcome',1)
@@ -36,7 +41,7 @@ def report(path, result):
     d.add_paragraph('Official company articles only; not independent media coverage. Article dates may require manual verification. These items are not proven explanations of a result.')
     for n in result['news']:
         d.add_heading(n['title'][:150],2)
-        d.add_paragraph(n['text'][:700]); d.add_paragraph('Source: '+n['url'])
+        d.add_paragraph(n['text']); d.add_paragraph('Source: '+n['url'])
     if result.get('errors'):
         d.add_heading('Failures requiring attention',1)
         for e in result['errors']: d.add_paragraph(e)

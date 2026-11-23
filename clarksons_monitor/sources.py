@@ -100,7 +100,11 @@ def extract(content, item):
     for n,t in enumerate(pages,1):
         if 'commented:' in t or 'Chief Executive Officer’s review' in t:
             # Evidence, not a generated explanation of numerical variance.
-            comments.append(dict(page=n, url=item['url'], text=' '.join(t.split())[:2200]))
+            evidence=t.split('commented:',1)[-1] if 'commented:' in t else t.split('review',1)[-1]
+            if 'Enquiries:' in evidence: evidence=evidence.split('Enquiries:',1)[0]
+            if 'Market backdrop' in t: evidence=t.split('Market backdrop',1)[1]
+            sentences=re.split(r'(?<=[.!?])\s+', ' '.join(evidence.split()))
+            comments.append(dict(page=n, url=item['url'], text=' '.join(sentences[:5])))
     return dict(**item, metrics=metrics, comments=comments, sha256=hashlib.sha256(content).hexdigest(), period_check='PASS')
 
 
@@ -108,6 +112,7 @@ def news():
     url = ROOT + '/home/news-and-insights/'
     soup = BeautifulSoup(fetch(url), 'html.parser')
     result, seen = [], set()
+    scanned=0
     for a in soup.select('a[href]'):
         target = urljoin(url, a['href']).split('#')[0]
         if '/home/news-and-insights/' not in target or target.rstrip('/') == url.rstrip('/') or target in seen:
@@ -118,10 +123,17 @@ def news():
         if len(title) < 15:
             continue
         seen.add(target)
+        scanned += 1
+        if scanned > 15: break
         page = BeautifulSoup(fetch(target), 'html.parser')
+        heading=page.find('h1')
+        title=heading.get_text(' ',strip=True) if heading else title
+        if re.search(r'training|trainee|talent|charit|award|graduate',title,re.I): continue
         main = page.find('main') or page
-        text = ' '.join(main.get_text(' ', strip=True).split())
-        result.append(dict(title=title, url=target, text=text[:2500],
+        paragraphs=[p.get_text(' ',strip=True) for p in main.select('p') if len(p.get_text(strip=True))>50]
+        text=' '.join(paragraphs) or ' '.join(main.get_text(' ', strip=True).split())
+        text=' '.join(re.split(r'(?<=[.!?])\s+',text)[:4])
+        result.append(dict(title=title, url=target, text=text,
                            published=(page.find('time').get('datetime') if page.find('time') else None)))
         if len(result) == 5:
             break
